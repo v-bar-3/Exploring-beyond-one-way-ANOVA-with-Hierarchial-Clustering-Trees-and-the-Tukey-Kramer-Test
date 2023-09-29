@@ -3,7 +3,7 @@ Project 2 for STAT 106: Analysis of Variance
 
 This project utilizes the Heart Disease dataset from Kaggle: https://www.kaggle.com/datasets/alexteboul/heart-disease-health-indicators-dataset
 
-Project Guidelines and Prompt:
+**Project Guidelines and Prompt:**
 
 Divide the entire data set into 32(= K ) samples with respect to 5 binary variables of your choices, for instance, HD, Sex, Stroke, Blood-pressure, Cholesterol. Compare the 32 BMI distributions.
 
