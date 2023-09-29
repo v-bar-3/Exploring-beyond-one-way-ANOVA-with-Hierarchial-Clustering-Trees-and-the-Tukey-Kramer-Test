@@ -1,0 +1,609 @@
+---
+title: "STA106-Project2"
+author: "Vincent Barletta"
+date: "2023-03-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Part 1
+
+In this part of the report, we are going to examine the following questions with simulated data.
+
+What if there exist huge imbalances among sample sizes {n1,n2,..,nK }? For instance, n1 = n2 = .. = nK −1 = 100, but nK = 106.
+
+What if the equal variance assumption is violated? That is, members of {σ21 ,σ22 ,..,σ2K } are not all equal.
+
+What if the Normality assumption is violated?
+
+What if you want to discover the community structures among the K samples?
+
+
+
+### Sample Data and Expected Results for Future Simulation
+
+Before we move forward into using these larger simulations for comparison, we will use the sample data provided in section. These are much smaller datasets, so the overall takeaway is much lower than large-scale simulations. However, we want to do this anyways to show the expected test results with non-standardized data.
+
+
+From the discussion 7 PDF, we get the following dataset description:
+
+"An economist compiled data on productivity improvements last year for a sample of firms producing electronic computing equipment. The firms were classified according to the level of their average expenditures for research and development in the past three years (low, moderate, high). The results of the study follow:"
+
+```{r}
+# input data
+Y1 = c(7.6, 8.2, 6.8, 5.8, 6.9, 6.6, 6.3, 7.7, 6.0)
+Y2 = c(6.7, 8.1, 9.4, 8.6, 7.8, 7.7, 8.9, 7.9, 8.3, 8.7, 7.1, 8.4)
+Y3 = c(8.5, 9.7, 10.1, 7.8, 9.6, 9.5)
+Y1=cbind(Y1,1)
+Y2=cbind(Y2,2)
+Y3=cbind(Y3,3)
+mydata=rbind(Y1,Y2,Y3)
+colnames(mydata)=c('y','level')
+# convert to data.frame
+mydata=as.data.frame(mydata)
+
+
+# convert to factor variable
+mydata$level=as.factor(mydata$level)
+# Fit an Analysis of Variance Model
+# function: aov(formula, data = NULL)
+# formula response y~factor1 + factor2 + ...
+fit1=aov(y~level,data=mydata)
+# Run the ANOVA test
+anova(fit1)
+
+# Construct 95% familywise confidence intervals for all
+# pairwise comparisons by Tukey’s procedure.
+# conf.level: family-wise confidence level
+tukey=TukeyHSD(fit1, conf.level=.95)
+tukey
+plot(tukey)
+```
+
+
+
+Using a confidence level of 0.95 and alpha = 0.05, we can see that the three groups have a significant difference in mean as evidenced by our results table.
+
+For Levels 2-1 comparison, there is a 1.255 difference with a p-value of 0.004. The null hypothesis of the Tukey-Test is that X1 - X0 = 0. As our p-value is well below the alpha of 0.05, we reject the null hypothesis and establish that the means are not equal. 
+
+We can see this additionally for Levels 3-1 and 3-2 as they hold adjusted p-values of 0.0000335 and 0.0348, respectively. 
+
+
+
+### Baseline Test
+
+As a baseline test, we will setup with multiple classes of the Normal distribution with equal mean and variance. We will run an ANOVA test to see how they compare.
+
+```{r }
+K=3
+# mean1=(mu1,mu2,mu3)
+mean1=c(1,1,1)
+# sd1=(sigma1,sigma2,sigma3)
+sd1=c(1,1,3)
+# samples=(n1,n2,n3)
+samples=c(10000,10000,10000)
+
+# initialize mydata
+mydata=data.frame()
+
+for(i in 1:K){
+  Yi=rnorm(samples[i],mean=mean1[i],sd=sd1[i])
+  data_i=cbind(Yi,i)
+  mydata=rbind(mydata,data_i)
+}
+colnames(mydata)=c('y','level')
+# convert to factor variable
+mydata$level=as.factor(mydata$level)
+mydata
+
+fit1=aov(y~level,data=mydata)
+anova(fit1)
+
+result1=anova(fit1)
+result1$`Pr(>F)`[1]
+```
+If you run this multiple times, it yields very different p-values. On this instance, it gives us a p-value of 0.1804. But other times, it gives a p-value below a = 0.05. This is bad, because it should always yield a value above 0.05 because each K class has equal means and we want to fail to reject the null hypothesis that mean1 = mean2.
+
+In order to get a more accurate measurement, we should either change the sample size or simulate it many times and find the overall averages. This is what we will do moving forward.
+
+```{r}
+# B number of replicates
+B=10000
+# save all p-values in the vector pvalues1
+pvalues1=numeric(B)
+for(b in 1:B){
+  K=3
+  # mean1=(mu1,mu2,mu3)
+  mean1=c(1,1,1)
+  # sd1=(sigma1,sigma2,sigma3)
+  sd1=c(1,1,1)
+  # samples=(n1,n2,n3)
+  samples=c(10,10,10)
+
+  # initialize mydata
+  mydata=data.frame()
+
+  for(i in 1:K){
+    Yi=mean1[i]+rnorm(samples[i],mean=0,sd=sd1[i])
+    data_i=cbind(Yi,i)
+    mydata=rbind(mydata,data_i)
+  }
+  colnames(mydata)=c('y','level')
+  # convert to factor variable
+  mydata$level=as.factor(mydata$level)
+  # fit anova model
+  fit1=aov(y~level,data=mydata)
+
+  # extract p-value
+  result1=anova(fit1)
+  pvalues1[b]=result1$`Pr(>F)`[1]
+  
+}
+sum(pvalues1<0.05)/B
+```
+
+With the basic parameters, we receive a p-value close to alpha = 0.05. This means that the F-Test should hold up under these settings.
+
+
+### What if there exist huge imbalances among sample sizes {n1,n2,..,nK }? For instance, n1 = n2 = .. = nK −1 = 100, but nK = 106.
+
+```{r}
+# B number of replicates
+B=10000
+# save all p-values in the vector pvalues1
+pvalues1=numeric(B)
+for(b in 1:B){
+  K=3
+  # mean1=(mu1,mu2,mu3)
+  mean1=c(1,1,1)
+  # sd1=(sigma1,sigma2,sigma3)
+  sd1=c(1,1,1)
+  # samples=(n1,n2,n3)
+  samples=c(15,10,10)
+
+  # initialize mydata
+  mydata=data.frame()
+
+  for(i in 1:K){
+    Yi=mean1[i]+rnorm(samples[i],mean=0,sd=sd1[i])
+    data_i=cbind(Yi,i)
+    mydata=rbind(mydata,data_i)
+  }
+  colnames(mydata)=c('y','level')
+  # convert to factor variable
+  mydata$level=as.factor(mydata$level)
+  # fit anova model
+  fit1=aov(y~level,data=mydata)
+
+  # extract p-value
+  result1=anova(fit1)
+  pvalues1[b]=result1$`Pr(>F)`[1]
+  
+}
+sum(pvalues1<0.05)/B
+```
+When we change the sample size for one of the classes to n = 20, a 100% increase over the other samples, we still get a p-value of 0.0526, meaning that we still consider all of the means to be equal across 10,000 simulations.
+
+Therefore, we can conclude that a large change in samples does not have a remarkable effect on ANOVA testing.
+
+
+### What if the equal variance assumption is violated? That is, members of {σ21 ,σ22 ,..,σ2K } are not all equal.
+
+Here, we will change σ3 to 3, and see how the results change. Let's try this on a basic level, where we will use very large sample amounts, but only a singular simulation.
+
+```{r}
+K=3
+# mean1=(mu1,mu2,mu3)
+mean1=c(1,1,1)
+# sd1=(sigma1,sigma2,sigma3)
+sd1=c(1,1,3)
+# samples=(n1,n2,n3)
+samples=c(10000,10000,10000)
+
+# initialize mydata
+mydata=data.frame()
+
+for(i in 1:K){
+  Yi=rnorm(samples[i],mean=mean1[i],sd=sd1[i])
+  data_i=cbind(Yi,i)
+  mydata=rbind(mydata,data_i)
+}
+colnames(mydata)=c('y','level')
+# convert to factor variable
+mydata$level=as.factor(mydata$level)
+
+fit1=aov(y~level,data=mydata)
+anova(fit1)
+
+tukey1 <- TukeyHSD(fit1)
+tukey1
+plot(tukey1)
+
+result1=anova(fit1)
+result1$`Pr(>F)`[1]
+```
+
+We get a p-value of 0.966, showing that in this example, at least, the variance increase has very little change on the overall mean, and all three means are still equal.
+
+```{r, echo = FALSE}
+# B number of replicates
+
+B=10000
+# save all p-values in the vector pvalues1
+pvalues1=numeric(B)
+for(b in 1:B){
+  K=3
+  # mean1=(mu1,mu2,mu3)
+  mean1=c(1,1,1)
+  # sd1=(sigma1,sigma2,sigma3)
+  sd1=c(1,1,3)
+  # samples=(n1,n2,n3)
+  samples=c(10,10,10)
+
+  # initialize mydata
+  mydata=data.frame()
+
+  for(i in 1:K){
+    Yi=mean1[i]+rnorm(samples[i],mean=0,sd=sd1[i])
+    data_i=cbind(Yi,i)
+    mydata=rbind(mydata,data_i)
+  }
+  colnames(mydata)=c('y','level')
+  # convert to factor variable
+  mydata$level=as.factor(mydata$level)
+  # fit anova model
+  fit1=aov(y~level,data=mydata)
+
+  # extract p-value
+  result1=anova(fit1)
+  pvalues1[b]=result1$`Pr(>F)`[1]
+  
+}
+sum(pvalues1<0.05)/B
+```
+When we change the variance of one of the classes, we get an p-value of 0.078. Since the p-value is greater than alpha = 0.05, we fail to reject the null hypothesis and conclude that the means are equal. Therefore, causing a 9x change in variance (sd = 3 so Var = 9 compared to other var1 = var2 = 1).
+
+### Normality Assumption
+Here, we are going to use the t-test to simulate distributions with varying degrees of freedom that are not normal, and compare them to a t-distribution that approaches normality. The higher that we increase the degrees of freedom, the closer the distribution is to normality. 
+
+We will create a T-Distribution with df = 3, df = 5, df = 10, and df = 5000 (to represent the normal distribution).
+
+```{r}
+group1<-rt(100,3, ncp = 0)
+group2<-rt(100,5, ncp = 0)
+group3<-rt(100,10, ncp = 0)
+group4<-rt(1000000,5000, ncp = 0)
+
+
+hist(group1)
+hist(group2)
+hist(group3)
+hist(group4)
+
+
+data<-data.frame(
+  value=c(group1,group2,group3, group4),
+  group=factor(rep(c("Group 1",'Group 2', 'Group 3',"Group 4"),c(length(group1),length(group2),length(group3), length(group4))))
+)
+
+model<-aov(value~group,data = data)
+summary(model)
+
+tukey<-TukeyHSD(model)
+tukey
+plot(tukey)
+```
+
+Based on the table output, we can see that there are key differences in Groups 2 - Group 1 means
+and Group 4 - Group 1 means. As we scale the degrees of freedom up, the differences are much smaller. 
+We can see this with the adjusted p-values. The G2-G1 Tukey test has a p-value of 0.006, and G4-G1 Tukey test has a p-value of 0.001, meaning that we reject the null hypothesis and the means are different.
+
+Therefore, we can see that violating the assumption of normalcy (which is central to the Tukey-Test) changes the overall means of each distribution.
+
+### What if you want to discover the community structures among the K samples?
+
+If we wanted to look at the community structures across the K samples, we can create three branching HC trees. This is done largely because we have three different K values. However, this does not mean that each value will be in their respective trees. We can see this at the end where we do print(cut_tree) and we can see that many of the values are spread across different trees.
+
+```{r}
+
+#Generate three samples of normal data
+set.seed(123)
+K=3
+mean1=c(1,1,1)
+sd1=c(1,1,1)
+samples=c(10,10,10)
+
+mydata=data.frame()
+
+for(i in 1:K){
+  Yi=rnorm(samples[i],mean=mean1[i],sd=sd1[i])
+  data_i=cbind(Yi,i)
+  mydata=rbind(mydata,data_i)
+}
+
+#Now we can begin the process of clustering. 
+
+hcgroups <- hclust(dist(mydata))
+#Cut the tree to get clusters
+cut_tree <- cutree(hcgroups, k = 3)
+
+# Plot the dendrogram with clusters highlighted
+plot(hcgroups)
+rect.hclust(hcgroups, k = 3, border = "blue")
+
+# Print the cluster membership of each sample
+print(cut_tree)
+
+```
+
+## Part 2
+Now that we have seen how changes in variance, normality, and sample size affect the overall means of each sample, we can begin to use the HD dataset to apply our understanding to actual data. 
+
+
+```{r}
+heart= read.csv('heart_disease_health_indicators_BRFSS2015.csv',header=TRUE)
+heart$HeartDiseaseorAttack=as.factor(heart$HeartDiseaseorAttack)
+heart$HighBP=as.factor(heart$HighBP)
+heart$HighChol=as.factor(heart$HighChol)
+heart$Sex = as.factor(heart$Sex)
+heart$Stroke = as.factor(heart$Stroke)
+
+```
+
+
+## Divide the entire data set into 32(= K ) samples with respect to 5 binary variables of your choices, for instance, HD, Sex, Stroke, Blood-pressure, Cholesterol. Compare the 32 BMI distributions.
+
+
+```{r, echo = FALSE}
+# all none
+data1 <- subset(heart, HeartDiseaseorAttack == 0 & HighBP == 0 & HighChol == 0 & Sex == 0 & Stroke == 0,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+# 1 1
+data2 <- subset(heart, HeartDiseaseorAttack == 0 & HighBP == 0 & HighChol == 0 & Sex == 0 & Stroke == 1,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+data17 <- subset(heart, HeartDiseaseorAttack == 1 & HighBP == 0 & HighChol == 0 & Sex == 0 & Stroke == 0,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+data18 <- subset(heart, HeartDiseaseorAttack == 0 & HighBP == 1 & HighChol == 0 & Sex == 0 & Stroke == 0,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+data19 <- subset(heart, HeartDiseaseorAttack == 0 & HighBP == 0 & HighChol == 1 & Sex == 0 & Stroke == 0,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+data20 <- subset(heart, HeartDiseaseorAttack == 0 & HighBP == 0 & HighChol == 0 & Sex == 1 & Stroke == 0,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+
+
+# 2 1's
+
+data3 <- subset(heart, HeartDiseaseorAttack == 0 & HighBP == 0 & HighChol == 0 & Sex == 1 & Stroke == 1,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+data30 <- subset(heart, HeartDiseaseorAttack == 0 & HighBP == 0 & HighChol == 1 & Sex == 0 & Stroke == 1,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+data4 <- subset(heart, HeartDiseaseorAttack == 0 & HighBP == 1 & HighChol == 0 & Sex == 0 & Stroke == 1,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+data5 <- subset(heart, HeartDiseaseorAttack == 1 & HighBP == 0 & HighChol == 0 & Sex == 0 & Stroke == 1,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+data21 <- subset(heart, HeartDiseaseorAttack == 1 & HighBP == 1 & HighChol == 0 & Sex == 0 & Stroke == 0,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+data22 <- subset(heart, HeartDiseaseorAttack == 1 & HighBP == 0 & HighChol == 1 & Sex == 0 & Stroke == 0,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+data23 <- subset(heart, HeartDiseaseorAttack == 1 & HighBP == 0 & HighChol == 0 & Sex == 1 & Stroke == 0,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+data24 <- subset(heart, HeartDiseaseorAttack == 0 & HighBP == 1 & HighChol == 1 & Sex == 0 & Stroke == 0,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+data25 <- subset(heart, HeartDiseaseorAttack == 0 & HighBP == 0 & HighChol == 1 & Sex == 1 & Stroke == 0,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+data31 <- subset(heart, HeartDiseaseorAttack == 0 & HighBP == 1 & HighChol == 0 & Sex == 1 & Stroke == 0,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+
+# 3 1's
+#00111
+data6 <- subset(heart, HeartDiseaseorAttack == 0 & HighBP == 0 & HighChol == 1 & Sex == 1 & Stroke == 1,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+#01011
+data11 <- subset(heart, HeartDiseaseorAttack == 0 & HighBP == 1 & HighChol == 0 & Sex == 1 & Stroke == 1,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+#10011
+data9 <- subset(heart, HeartDiseaseorAttack == 1 & HighBP == 0 & HighChol == 0 & Sex == 1 & Stroke == 1,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+
+#01101
+data32 <- subset(heart, HeartDiseaseorAttack == 0 & HighBP == 1 & HighChol == 1 & Sex == 0 & Stroke == 1,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+
+#11001
+data7 <- subset(heart, HeartDiseaseorAttack == 1 & HighBP == 1 & HighChol == 0 & Sex == 0 & Stroke == 1,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+
+# 11001, 10101, 01101, 10011, 11010
+#01011, 11100, 10110, 01110, 00111
+
+#10101
+data8 <- subset(heart, HeartDiseaseorAttack == 1 & HighBP == 0 & HighChol == 1 & Sex == 0 & Stroke == 1,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+
+#11001
+data12 <- subset(heart, HeartDiseaseorAttack == 1 & HighBP == 1 & HighChol == 0 & Sex == 1 & Stroke == 0,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+
+#11100
+data27 <- subset(heart, HeartDiseaseorAttack == 1 & HighBP == 1 & HighChol == 1 & Sex == 0 & Stroke == 0,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+
+#10110
+data28 <- subset(heart, HeartDiseaseorAttack == 1 & HighBP == 0 & HighChol == 1 & Sex == 1 & Stroke == 0,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+
+#01110
+data29 <- subset(heart, HeartDiseaseorAttack == 0 & HighBP == 1 & HighChol == 1 & Sex == 1 & Stroke == 0,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+
+#4 1's
+data10 <- subset(heart, HeartDiseaseorAttack == 1 & HighBP == 0 & HighChol == 1 & Sex == 1 & Stroke == 1,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+data13 <- subset(heart, HeartDiseaseorAttack == 1 & HighBP == 1 & HighChol == 1 & Sex == 0 & Stroke == 1,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+data15 <- subset(heart, HeartDiseaseorAttack == 0 & HighBP == 1 & HighChol == 1 & Sex == 1 & Stroke == 1,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+data16 <- subset(heart, HeartDiseaseorAttack == 1 & HighBP == 1 & HighChol == 0 & Sex == 1 & Stroke == 1,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+data26 <- subset(heart, HeartDiseaseorAttack == 1 & HighBP == 1 & HighChol == 1 & Sex == 1 & Stroke == 0,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+
+
+# 5 1's
+data14 <- subset(heart, HeartDiseaseorAttack == 1 & HighBP == 1 & HighChol == 1 & Sex == 1 & Stroke == 1,
+select= c(HeartDiseaseorAttack, HighBP, HighChol, Sex, Stroke, BMI))
+
+```
+After that monotonous and arduous task of splitting up everything individually, let's look at some example graphs. The ones that we are most interested in are data1 = (0,0,0,0,0) and data14 = (1,1,1,1,1).
+
+```{r}
+hist(data1$BMI, col='green')
+hist(data14$BMI, col='red')
+
+```
+To move forward, we need to give each dataset a level and combine them all together. I will do this very monotonous work via brute force (unfortunately.) This code will blotted out for your convenience.
+```{r, echo = FALSE}
+data1$Sample <- 1
+data2$Sample <- 2
+data3$Sample <- 3
+data4$Sample <- 4
+data5$Sample <- 5
+data6$Sample <- 6
+data7$Sample <- 7
+data8$Sample <- 8
+data9$Sample <- 9
+data10$Sample <- 10
+data11$Sample <- 11
+data12$Sample <- 12
+data13$Sample <- 13
+data14$Sample <- 14
+data15$Sample <- 15
+data16$Sample <- 16
+data17$Sample <- 17
+data18$Sample <- 18
+data19$Sample <- 19
+data20$Sample <- 20
+data21$Sample <- 21
+data22$Sample <- 22
+data23$Sample <- 23
+data24$Sample <- 24
+data25$Sample <- 25
+data26$Sample <- 26
+data27$Sample <- 27
+data28$Sample <- 28
+data29$Sample <- 29
+data30$Sample <- 30
+data31$Sample <- 31
+data32$Sample <- 32
+
+```
+
+Let's combine all of these datasets together into a grouped dataset. This will allow us to use facet_wrap on ggplot, which will display all 32 graphs based on which sample they came from.
+
+
+```{r}
+grouped_hd <- rbind(data1,data2,data3,data4,data5,data6,data7,data8,data9,data10,data11,data12,data13,data14,data15,data16,data17,data18,data19,data20,data21,data22,data23,data24,data25,data26,data27,data28,data29,data30,data31,data32)
+
+grouped_hd$Sample=as.factor(grouped_hd$Sample)
+ggplot(data = grouped_hd, aes(BMI)) +
+  geom_histogram(color = "steelblue") +
+  facet_wrap(~ Sample)
+
+```
+
+We can immediately see a few standouts based on the graphs with a large number of entries. The most populous graphs are 1, 18, 19, 20, 24, 25, 29, 31. The rest have much less samples.
+
+These translate to the following selections. Consider placement as (heart disease, HighBP, HighChol, Sex, Stroke):
+
+1: (0,0,0,0,0)
+18: (0, 1, 0, 0, 0)
+19: (0 0 1 0 0)
+20: (0 0 0 1 0)
+24: (0 1 1 0 0)
+25: (0 0 1 1 0)
+29: (0 1 1 1 0)
+31: (0 1 0 1 0)
+
+Unsurprisingly, none of the most populous datasets include Heart Disease or Attack as the population of people with this attribute is relatively small. 
+
+```{r}
+
+hist(data1$BMI, col='green')
+hist(data18$BMI, col='red', add = TRUE)
+hist(data19$BMI, col='blue', add = TRUE)
+hist(data20$BMI, col='yellow', add = TRUE)
+hist(data24$BMI, col='purple', add = TRUE)
+hist(data25$BMI, col='gray', add = TRUE)
+hist(data29$BMI, col='orange', add = TRUE)
+hist(data31$BMI, col='cyan', add = TRUE)
+
+```
+Here, we can see the most populous distributions tend to follow a similar distribution shape. 
+This shape, however, is clearly not normal, has different variances and different means.
+
+This is a great example for seeing how the Tukey-Kramer test holds up for a dataset that violates all primary assumptions.
+
+### Perform the one-way ANOVA and Tukey-Kramer’s simultaneous pairwise comparison as if all Normality and equal-variance assumptions hold. Check whether the equal variance assumption is violated? That is, members of {σ21 ,σ22 ,..,σ2K } are not all equal.
+
+```{r}
+grouped_hd$Sample=as.factor(grouped_hd$Sample)
+
+model<-aov(BMI~Sample,data = grouped_hd)
+anova(model)
+
+tukey<-TukeyHSD(model)
+tukey
+plot(tukey)
+```
+According to our models specifics, the P-value is very low, clocking in at 2.2e-16. Therefore, we can confirm that across all models, the means are very different, and we can reject the null hypothesis.
+
+Let's dive further into the graph's output and look at some individual differences between the datasets.
+
+This is a pretty muddled graph. We want to look at the graphs that have the largest difference in mean
+and some with the smallest difference in mean. We will choose an arbitrary cutoff point of 3.8 for the largest difference
+
+```{r}
+
+tukey_diff <-tukey$Sample[,1]
+hist(tukey_diff)
+
+diff_greater_than_3.8 <- subset(tukey_diff, tukey_diff > 3.8)
+diff_greater_than_3.8
+
+```
+Here, we see Graph 5 is a common denominator, and is quite distant from 7, 13, 24, and 26.
+Our dataset for 5 has HeartDiseaseorAttack, is Male, and has had a Stroke as its primary factors.
+
+```{r}
+mean(data5$BMI)
+
+nrow(data5)
+```
+Surprisingly, I would expect this person to have a high BMI. In actuality, they have a much lower BMI than the other samples with a BMI of . This is because n = 183 for this dataset, whereas the others have much higher sample sizes.
+
+On the other side, we can look at maximum negative differences, choosing 2.6 as a cutoff point.
+
+```{r}
+diff_less_than <- subset(tukey_diff, tukey_diff < -2.6)
+diff_less_than
+```
+Here, we can see that 7 and 13 are outlier graphs.
+Dataset 7 has HD, HighBP, and Stroke.
+Dataset 13 has HD, HighBP, HighChol, and Stroke
+
+```{r}
+mean(data7$BMI)
+mean(data13$BMI)
+```
+These two have very high BMIs, so it is unsurprising that they have larger distance away from a multitude of datasets from healthier patients.
+
+
+
+### Check whether the Normality assumption is violated?
+
+### Construct HC-tree to discover the community structures among the K samples?
+
+
